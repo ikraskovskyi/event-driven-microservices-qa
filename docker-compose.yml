@@ -1,0 +1,245 @@
+# Event-Driven Microservices QA: the whole system, from prebuilt images
+#
+# Start:   docker compose up -d --wait   (returns once all services are healthy)
+# Stop:    docker compose down
+#
+# All data is ephemeral: every start gets empty databases (re-seeded by the
+# services) and a fresh Kafka with freshly created topics.
+#
+# SUT version: SUT_TAG (default latest; CI pins sha-<short commit>).
+# Don't run together with the fork's own stack: same ports.
+#
+# Ports
+#   8081 order-service      8084 notification-service
+#   8082 payment-service    8085 analytics-service
+#   8083 inventory-service  8080 Kafka UI (override: KAFKA_UI_PORT)
+#   29092 Kafka (from the host)
+#   5432-5435 Postgres: order, payment, inventory, analytics
+#   5050 pgAdmin (override: PGADMIN_PORT)
+
+name: edm-qa
+
+# ==========================================================
+# Shared definitions
+# ==========================================================
+
+x-postgres: &postgres
+  image: postgres:17.6
+  environment: &postgres-env
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+  tmpfs:
+    - /var/lib/postgresql/data
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -h localhost -U postgres -d $${POSTGRES_DB}"]
+    interval: 3s
+    timeout: 3s
+    retries: 20
+
+x-service-env: &service-env
+  SPRING_DATASOURCE_USERNAME: postgres
+  SPRING_DATASOURCE_PASSWORD: postgres
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+# Reads SERVER_PORT from each service's environment
+x-service-healthcheck: &service-healthcheck
+  test: ["CMD-SHELL", "curl -fs http://localhost:$${SERVER_PORT}/actuator/health || exit 1"]
+  interval: 5s
+  timeout: 3s
+  retries: 20
+  start_period: 30s
+
+services:
+
+  # ==========================================================
+  # Kafka
+  # ==========================================================
+
+  kafka:
+    image: apache/kafka:4.0.0
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # PLAINTEXT -> containers (kafka:9092), PLAINTEXT_HOST -> host (localhost:29092)
+      KAFKA_LISTENERS: PLAINTEXT://:9092,PLAINTEXT_HOST://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  kafka-init:
+    image: apache/kafka:4.0.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      PARTITIONS: 3
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for topic in order-created payment-succeeded inventory-reserved inventory-failed \
+                     payment-refunded payment-succeeded-retry payment-succeeded-dlt; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+            --topic "$$topic" --partitions "$$PARTITIONS" --replication-factor 1
+        done
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.3.0
+    ports:
+      - "${KAFKA_UI_PORT:-8080}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ==========================================================
+  # Databases (one per service)
+  # ==========================================================
+
+  order-db:
+    <<: *postgres
+    environment:
+      <<: *postgres-env
+      POSTGRES_DB: order_db
+    ports:
+      - "5432:5432"
+
+  payment-db:
+    <<: *postgres
+    environment:
+      <<: *postgres-env
+      POSTGRES_DB: payment_db
+    ports:
+      - "5433:5432"
+
+  inventory-db:
+    <<: *postgres
+    environment:
+      <<: *postgres-env
+      POSTGRES_DB: inventory_db
+    ports:
+      - "5434:5432"
+
+  analytics-db:
+    <<: *postgres
+    environment:
+      <<: *postgres-env
+      POSTGRES_DB: analytics_db
+    ports:
+      - "5435:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4:9.10
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    volumes:
+      - ./sut/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./sut/pgadmin/pgpass:/pgadmin4/pgpass:ro
+    entrypoint: ["/bin/sh", "-c", "cp /pgadmin4/pgpass /tmp/pgpass && chmod 600 /tmp/pgpass && exec /entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/misc/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      - order-db
+      - payment-db
+      - inventory-db
+      - analytics-db
+
+  # ==========================================================
+  # Services
+  # ==========================================================
+
+  order-service:
+    image: ghcr.io/ikraskovskyi/event-driven-microservices/order-service:${SUT_TAG:-latest}
+    ports:
+      - "8081:8081"
+    environment:
+      SERVER_PORT: 8081
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://order-db:5432/order_db
+    healthcheck: *service-healthcheck
+    depends_on:
+      order-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  payment-service:
+    image: ghcr.io/ikraskovskyi/event-driven-microservices/payment-service:${SUT_TAG:-latest}
+    ports:
+      - "8082:8082"
+    environment:
+      SERVER_PORT: 8082
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://payment-db:5432/payment_db
+    healthcheck: *service-healthcheck
+    depends_on:
+      payment-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  inventory-service:
+    image: ghcr.io/ikraskovskyi/event-driven-microservices/inventory-service:${SUT_TAG:-latest}
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://inventory-db:5432/inventory_db
+    healthcheck: *service-healthcheck
+    depends_on:
+      inventory-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  notification-service:
+    image: ghcr.io/ikraskovskyi/event-driven-microservices/notification-service:${SUT_TAG:-latest}
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: 8084
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    healthcheck: *service-healthcheck
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
+  analytics-service:
+    image: ghcr.io/ikraskovskyi/event-driven-microservices/analytics-service:${SUT_TAG:-latest}
+    ports:
+      - "8085:8085"
+    environment:
+      SERVER_PORT: 8085
+      <<: *service-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://analytics-db:5432/analytics_db
+    healthcheck: *service-healthcheck
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
