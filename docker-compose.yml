@@ -16,6 +16,8 @@
 #   29092 Kafka (from the host)
 #   5432-5435 Postgres: order, payment, inventory, analytics
 #   5050 pgAdmin (override: PGADMIN_PORT)
+#   9090 Prometheus (override: PROMETHEUS_PORT)
+#   3000 Grafana (override: GRAFANA_PORT)
 
 name: edm-qa
 
@@ -243,3 +245,39 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+
+  # ==========================================================
+  # Observability
+  # ==========================================================
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/healthy || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      prometheus:
+        condition: service_healthy
