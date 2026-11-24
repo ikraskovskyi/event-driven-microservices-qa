@@ -27,7 +27,7 @@ docker compose down           # stop and remove everything
 | Analytics API (Swagger) | http://localhost:8085/swagger-ui.html |
 | Health / Prometheus metrics | `http://localhost:808x/actuator/health`, `/actuator/prometheus` (ports 8081–8085) |
 | Grafana: "SUT overview" dashboard, no login | http://localhost:3000 (change with `GRAFANA_PORT`) |
-| Prometheus: scrapes `/actuator/prometheus` of all 5 services every 5 s | http://localhost:9090 (change with `PROMETHEUS_PORT`) |
+| Prometheus: scrapes `/actuator/prometheus` of all 5 services and Kafka exporter (consumer lag) every 5 s | http://localhost:9090 (change with `PROMETHEUS_PORT`) |
 
 Notes:
 - **Data is ephemeral.** Every start gets fresh databases with stock reset to its initial values, and freshly created topics.

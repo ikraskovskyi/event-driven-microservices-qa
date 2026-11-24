@@ -50,7 +50,7 @@
         "legendFormat": "{{application}} {{method}} {{uri}}"
       }]
     },
-    { "type": "row", "title": "Kafka listeners", "gridPos": { "x": 0, "y": 9, "w": 24, "h": 1 } },
+    { "type": "row", "title": "Kafka", "gridPos": { "x": 0, "y": 9, "w": 24, "h": 1 } },
     {
       "type": "timeseries", "title": "Messages processed",
       "gridPos": { "x": 0, "y": 10, "w": 12, "h": 8 },
@@ -73,10 +73,32 @@
         "legendFormat": "{{application}}"
       }]
     },
-    { "type": "row", "title": "JVM", "gridPos": { "x": 0, "y": 18, "w": 24, "h": 1 } },
+    {
+      "type": "timeseries", "title": "Consumer lag",
+      "gridPos": { "x": 0, "y": 18, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [{
+        "refId": "A",
+        "expr": "kafka_consumergroup_lag_sum",
+        "legendFormat": "{{consumergroup}} {{topic}}"
+      }]
+    },
+    {
+      "type": "timeseries", "title": "Messages produced",
+      "gridPos": { "x": 12, "y": 18, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [{
+        "refId": "A",
+        "expr": "sum by (topic) (rate(kafka_topic_partition_current_offset{topic!~\"__.*\"}[$__rate_interval]))",
+        "legendFormat": "{{topic}}"
+      }]
+    },
+    { "type": "row", "title": "JVM", "gridPos": { "x": 0, "y": 26, "w": 24, "h": 1 } },
     {
       "type": "timeseries", "title": "CPU",
-      "gridPos": { "x": 0, "y": 19, "w": 6, "h": 8 },
+      "gridPos": { "x": 0, "y": 27, "w": 6, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
       "targets": [{
@@ -87,7 +109,7 @@
     },
     {
       "type": "timeseries", "title": "Heap used",
-      "gridPos": { "x": 6, "y": 19, "w": 6, "h": 8 },
+      "gridPos": { "x": 6, "y": 27, "w": 6, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
       "targets": [{
@@ -98,7 +120,7 @@
     },
     {
       "type": "timeseries", "title": "GC time (share of wall time)",
-      "gridPos": { "x": 12, "y": 19, "w": 6, "h": 8 },
+      "gridPos": { "x": 12, "y": 27, "w": 6, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
       "targets": [{
@@ -109,7 +131,7 @@
     },
     {
       "type": "timeseries", "title": "Live threads",
-      "gridPos": { "x": 18, "y": 19, "w": 6, "h": 8 },
+      "gridPos": { "x": 18, "y": 27, "w": 6, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "targets": [{
@@ -118,10 +140,10 @@
         "legendFormat": "{{application}}"
       }]
     },
-    { "type": "row", "title": "DB connection pool", "gridPos": { "x": 0, "y": 27, "w": 24, "h": 1 } },
+    { "type": "row", "title": "DB connection pool", "gridPos": { "x": 0, "y": 35, "w": 24, "h": 1 } },
     {
       "type": "timeseries", "title": "Connections (active / pending)",
-      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 36, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "targets": [
@@ -131,7 +153,7 @@
     },
     {
       "type": "timeseries", "title": "Mean connection wait",
-      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 36, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [{

@@ -250,6 +250,19 @@ services:
   # Observability
   # ==========================================================
 
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.9.0
+    command:
+      - --kafka.server=kafka:9092
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9308/metrics || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
   prometheus:
     image: prom/prometheus:v3.5.0
     ports:

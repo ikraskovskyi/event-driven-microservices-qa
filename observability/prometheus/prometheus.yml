@@ -11,3 +11,8 @@ scrape_configs:
           - inventory-service:8083
           - notification-service:8084
           - analytics-service:8085
+
+  - job_name: kafka
+    static_configs:
+      - targets:
+          - kafka-exporter:9308
