@@ -1,0 +1,4 @@
+order-db:5432:*:postgres:postgres
+payment-db:5432:*:postgres:postgres
+inventory-db:5432:*:postgres:postgres
+analytics-db:5432:*:postgres:postgres

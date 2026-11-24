@@ -1,0 +1,44 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "order_db",
+      "Group": "event-driven-microservices",
+      "Host": "order-db",
+      "Port": 5432,
+      "MaintenanceDB": "order_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpass"
+    },
+    "2": {
+      "Name": "payment_db",
+      "Group": "event-driven-microservices",
+      "Host": "payment-db",
+      "Port": 5432,
+      "MaintenanceDB": "payment_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpass"
+    },
+    "3": {
+      "Name": "inventory_db",
+      "Group": "event-driven-microservices",
+      "Host": "inventory-db",
+      "Port": 5432,
+      "MaintenanceDB": "inventory_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpass"
+    },
+    "4": {
+      "Name": "analytics_db",
+      "Group": "event-driven-microservices",
+      "Host": "analytics-db",
+      "Port": 5432,
+      "MaintenanceDB": "analytics_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpass"
+    }
+  }
+}
